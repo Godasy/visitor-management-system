@@ -3,12 +3,11 @@ const express = require('express');
 const sqlite3 = require('sqlite3').verbose();
 const cors = require('cors');
 const path = require('path');
-const fetch = require('node-fetch'); // 用于IP地区查询
+const fetch = require('node-fetch');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// 跨域配置
 app.use(cors({
   origin: '*',
   methods: ['GET', 'POST', 'DELETE'],
@@ -45,9 +44,28 @@ function runSql(sql, params = []) {
   });
 }
 
-// IP归属地查询（使用ipapi.co免费接口）
+// ！！！核心新增：获取北京时间（UTC+8），格式 YYYY-MM-DD HH:mm:ss
+function getBeijingTime() {
+  const now = new Date();
+  // 计算UTC时间戳 + 8小时偏移量（毫秒）
+  const beijingTime = new Date(now.getTime() + 8 * 60 * 60 * 1000);
+  // 格式化日期为字符串
+  const year = beijingTime.getUTCFullYear();
+  const month = String(beijingTime.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(beijingTime.getUTCDate()).padStart(2, '0');
+  const hours = String(beijingTime.getUTCHours()).padStart(2, '0');
+  const minutes = String(beijingTime.getUTCMinutes()).padStart(2, '0');
+  const seconds = String(beijingTime.getUTCSeconds()).padStart(2, '0');
+  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+}
+
+// ！！！核心新增：获取北京时间的日期部分（YYYY-MM-DD），用于今日数据查询
+function getBeijingDate() {
+  return getBeijingTime().split(' ')[0];
+}
+
+// IP归属地查询
 async function getIpRegion(ip) {
-  // 本地IP不查询
   if (ip === '127.0.0.1' || ip.includes('::')) return '本地网络';
   try {
     const response = await fetch(`https://ipapi.co/${ip}/json/`);
@@ -63,42 +81,42 @@ async function getIpRegion(ip) {
   }
 }
 
-// ===== 初始化数据表（新增region字段）=====
+// ===== 初始化数据表（修改时间字段默认值）=====
 function initDatabaseTables() {
-  // 访客表：新增region字段存储IP地区
+  // 访客表：visit_time 改为 TEXT 类型，手动存入北京时间
   const createVisitorTable = `
     CREATE TABLE IF NOT EXISTS visitor_stats (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       visitor_ip TEXT NOT NULL,
-      region TEXT DEFAULT '未知地区', -- 新增：IP归属地
-      visit_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+      region TEXT DEFAULT '未知地区',
+      visit_time TEXT NOT NULL, -- 改为TEXT，存储北京时间字符串
       user_agent TEXT DEFAULT '未知设备',
       is_valid BOOLEAN DEFAULT 1
     );
   `;
 
-  // 黑名单表
+  // 黑名单表：add_time 改为 TEXT 类型，手动存入北京时间
   const createBlacklistTable = `
     CREATE TABLE IF NOT EXISTS blacklist (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       blocked_ip TEXT NOT NULL UNIQUE,
-      add_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+      add_time TEXT NOT NULL, -- 改为TEXT，存储北京时间字符串
       remark TEXT DEFAULT '无备注'
     );
   `;
 
   db.run(createVisitorTable, (err) => {
     if (err) console.error('❌ 访客表创建失败：', err.message);
-    else console.log('✅ 访客表初始化成功（含地区字段）');
+    else console.log('✅ 访客表初始化成功（北京时间兼容）');
   });
 
   db.run(createBlacklistTable, (err) => {
     if (err) console.error('❌ 黑名单表创建失败：', err.message);
-    else console.log('✅ 黑名单表初始化成功');
+    else console.log('✅ 黑名单表初始化成功（北京时间兼容）');
   });
 }
 
-// ===== 接口1：记录访客访问（新增地区查询）=====
+// ===== 接口1：记录访客访问（使用北京时间）=====
 app.get('/api/visitor/record', async (req, res) => {
   try {
     // 获取真实IP
@@ -117,14 +135,15 @@ app.get('/api/visitor/record', async (req, res) => {
       return res.json({ success: false, msg: '您的IP已被拦截', isBlocked: true });
     }
 
-    // 查询IP地区
+    // 查询IP地区 + 生成北京时间
     const region = await getIpRegion(visitorIp);
     const userAgent = req.headers['user-agent'] || '未知设备';
+    const beijingTime = getBeijingTime(); // 使用北京时间
 
-    // 写入数据库（含地区）
+    // 写入数据库（存入北京时间）
     await runSql(
-      'INSERT INTO visitor_stats (visitor_ip, region, user_agent) VALUES (?, ?, ?)',
-      [visitorIp, region, userAgent]
+      'INSERT INTO visitor_stats (visitor_ip, region, visit_time, user_agent) VALUES (?, ?, ?, ?)',
+      [visitorIp, region, beijingTime, userAgent]
     );
 
     res.json({
@@ -132,7 +151,8 @@ app.get('/api/visitor/record', async (req, res) => {
       msg: '访问记录成功',
       isBlocked: false,
       visitorIp,
-      region
+      region,
+      visitTime: beijingTime // 返回北京时间，供前端调试
     });
   } catch (err) {
     console.error('❌ 记录访客失败：', err.message);
@@ -140,29 +160,32 @@ app.get('/api/visitor/record', async (req, res) => {
   }
 });
 
-// ===== 接口2：获取访客统计数据（图表+表格）=====
+// ===== 接口2：获取访客统计数据（基于北京时间查询）=====
 app.get('/api/visitor/stats', async (req, res) => {
   try {
     // 总访客数
     const total = await querySql('SELECT COUNT(*) AS total FROM visitor_stats WHERE is_valid = 1');
     const totalVisitors = parseInt(total[0].total || 0);
 
-    // 今日访客数
-    const today = new Date().toISOString().split('T')[0];
+    // ！！！修改：基于北京时间的今日数据查询
+    const today = getBeijingDate();
     const todayData = await querySql(
-      'SELECT COUNT(*) AS today FROM visitor_stats WHERE DATE(visit_time) = ? AND is_valid = 1',
+      "SELECT COUNT(*) AS today FROM visitor_stats WHERE DATE(visit_time) = ? AND is_valid = 1",
       [today]
     );
     const todayVisitors = parseInt(todayData[0].today || 0);
 
-    // 近7天趋势
+    // ！！！修改：基于北京时间的近7天趋势（计算7天前的北京时间）
+    const sevenDaysAgo = new Date(Date.now() + 8 * 60 * 60 * 1000 - 7 * 24 * 60 * 60 * 1000);
+    const sevenDaysAgoStr = `${sevenDaysAgo.getUTCFullYear()}-${String(sevenDaysAgo.getUTCMonth() + 1).padStart(2, '0')}-${String(sevenDaysAgo.getUTCDate()).padStart(2, '0')}`;
+    
     const sevenDays = await querySql(`
       SELECT DATE(visit_time) AS visit_date, COUNT(*) AS visitor_count
       FROM visitor_stats
-      WHERE visit_time >= datetime('now', '-7 days') AND is_valid = 1
+      WHERE visit_time >= ? AND is_valid = 1
       GROUP BY DATE(visit_time)
       ORDER BY visit_date ASC
-    `);
+    `, [sevenDaysAgoStr]);
 
     // TOP10 IP
     const topIp = await querySql(`
@@ -174,13 +197,13 @@ app.get('/api/visitor/stats', async (req, res) => {
       LIMIT 10
     `);
 
-    // 访客明细（用于表格展示）
+    // 访客明细
     const visitorList = await querySql(`
       SELECT id, visitor_ip, region, visit_time, user_agent
       FROM visitor_stats
       WHERE is_valid = 1
       ORDER BY visit_time DESC
-      LIMIT 100 -- 限制显示最新100条
+      LIMIT 100
     `);
 
     res.json({
@@ -190,7 +213,7 @@ app.get('/api/visitor/stats', async (req, res) => {
         todayVisitors,
         sevenDaysTrend: sevenDays,
         topIpList: topIp,
-        visitorList: visitorList // 新增：访客明细列表
+        visitorList: visitorList
       }
     });
   } catch (err) {
@@ -215,7 +238,7 @@ app.post('/api/visitor/reset', async (req, res) => {
   }
 });
 
-// ===== 接口4-6：黑名单管理 =====
+// ===== 接口4-6：黑名单管理（使用北京时间）=====
 app.get('/api/blacklist', async (req, res) => {
   try {
     const list = await querySql('SELECT * FROM blacklist ORDER BY add_time DESC');
@@ -233,7 +256,12 @@ app.post('/api/blacklist/add', async (req, res) => {
     const exist = await querySql('SELECT * FROM blacklist WHERE blocked_ip = ?', [ip]);
     if (exist.length > 0) return res.json({ success: false, msg: '该IP已在黑名单' });
 
-    await runSql('INSERT INTO blacklist (blocked_ip, remark) VALUES (?, ?)', [ip, remark || '无备注']);
+    // 存入北京时间
+    const beijingTime = getBeijingTime();
+    await runSql(
+      'INSERT INTO blacklist (blocked_ip, add_time, remark) VALUES (?, ?, ?)',
+      [ip, beijingTime, remark || '无备注']
+    );
     res.json({ success: true, msg: 'IP添加到黑名单成功' });
   } catch (err) {
     res.status(500).json({ success: false, msg: '添加黑名单失败' });
@@ -256,7 +284,7 @@ app.use(express.static('public'));
 // ===== 启动服务器 =====
 app.listen(PORT, () => {
   console.log(`🚀 服务器运行在 http://localhost:${PORT}`);
-  console.log(`🔗 访客记录接口：http://localhost:${PORT}/api/visitor/record`);
+  console.log(`⏰ 当前北京时间：${getBeijingTime()}`);
 });
 
 // 进程退出时关闭数据库
