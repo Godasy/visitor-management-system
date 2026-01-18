@@ -1,0 +1,10 @@
+# Node.js依赖文件夹
+node_modules/
+# 环境变量文件（敏感配置）
+.env
+# 系统缓存文件
+.DS_Store
+# npm日志文件
+npm-debug.log*
+# VS Code编辑器配置
+.vscode/

@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>访客展示页</title>
+  <!-- 引入Tailwind CSS（CDN，无需本地安装，提升兼容性） -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- 配置Tailwind自定义主题（提升美观性） -->
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: '#165DFF',
+            secondary: '#36BFFA',
+            neutral: '#F5F7FA',
+          },
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+          },
+        },
+      }
+    }
+  </script>
+  <style type="text/tailwindcss">
+    @layer utilities {
+      .content-auto {
+        content-visibility: auto;
+      }
+      .page-container {
+        min-height: 100vh;
+      }
+    }
+  </style>
+</head>
+<body class="bg-neutral font-sans">
+  <!-- 核心展示容器 -->
+  <div class="page-container flex flex-col items-center justify-center px-4">
+    <div class="w-full max-w-4xl bg-white rounded-2xl shadow-lg p-8 md:p-12 transition-all hover:shadow-xl">
+      <!-- 标题区域 -->
+      <div class="text-center mb-8">
+        <h1 class="text-[clamp(2rem,5vw,3rem)] font-bold text-gray-800 mb-2">欢迎访问</h1>
+        <p class="text-gray-600 text-lg">这是一个访客统计展示页，您的访问已被记录（非黑名单用户）</p>
+      </div>
+
+      <!-- 装饰性内容（提升美观性） -->
+      <div class="flex justify-center mb-8">
+        <img src="https://picsum.photos/800/400" alt="展示图片" class="rounded-xl w-full h-auto object-cover max-h-64">
+      </div>
+
+      <!-- 底部信息 -->
+      <div class="text-center text-gray-500 text-sm">
+        <p>© 2026 访客统计系统 | 管理入口：<a href="./admin.html" class="text-primary hover:underline">管理员页面</a></p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 记录访客访问 -->
+  <script>
+    // 页面加载完成后调用后端接口记录访问
+    window.onload = async () => {
+      try {
+        const response = await fetch('/api/visitor/record');
+        const result = await response.json();
+        
+        // 若IP被拦截，给出提示并隐藏核心内容
+        if (result.isBlocked) {
+          document.querySelector('.page-container').innerHTML = `
+            <div class="w-full max-w-md bg-white rounded-2xl shadow-lg p-8 text-center">
+              <h2 class="text-xl font-bold text-red-500 mb-4">访问被拦截</h2>
+              <p class="text-gray-600 mb-6">${result.msg}</p>
+              <div class="text-sm text-gray-500">如有疑问，请联系管理员</div>
+            </div>
+          `;
+        }
+      } catch (err) {
+        console.error('记录访问失败：', err);
+      }
+    };
+  </script>
+</body>
+</html>
