@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>访客管理后台</title>
+  <title>访客管理后台（IP+地区表格版）</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.8/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11.10.4/dist/sweetalert2.all.min.js"></script>
@@ -18,13 +18,16 @@
       }
     }
   </script>
-  <style> .card-shadow { box-shadow: 0 2px 14px rgba(0,0,0,0.06); } </style>
+  <style> 
+    .card-shadow { box-shadow: 0 2px 14px rgba(0,0,0,0.06); }
+    .table-responsive { overflow-x: auto; }
+  </style>
 </head>
 <body class="bg-neutral min-h-screen">
   <!-- 顶部导航 -->
   <header class="bg-white card-shadow sticky top-0 z-10">
     <div class="container mx-auto px-4 py-4 flex justify-between items-center">
-      <h1 class="text-xl font-bold text-primary">访客管理系统</h1>
+      <h1 class="text-xl font-bold text-primary">访客管理系统（IP+地区统计）</h1>
       <button id="resetBtn" class="bg-danger hover:bg-danger/90 text-white px-4 py-2 rounded-lg transition-all">
         重置访客数据
       </button>
@@ -56,8 +59,31 @@
         <div class="h-80"><canvas id="sevenDaysChart"></canvas></div>
       </div>
       <div class="bg-white rounded-xl card-shadow p-6">
-        <h3 class="text-lg font-semibold mb-4">TOP10 访客IP</h3>
+        <h3 class="text-lg font-semibold mb-4">TOP10 访客IP（含地区）</h3>
         <div class="h-80"><canvas id="topIpChart"></canvas></div>
+      </div>
+    </div>
+
+    <!-- 新增：访客明细表格（IP+地区） -->
+    <div class="bg-white rounded-xl card-shadow p-6 mb-8">
+      <h3 class="text-lg font-semibold mb-4">访客明细（最新100条）</h3>
+      <div class="table-responsive">
+        <table class="w-full text-left border-collapse">
+          <thead class="bg-gray-50 border-b border-gray-200">
+            <tr class="text-gray-600">
+              <th class="py-3 px-4">ID</th>
+              <th class="py-3 px-4">访客IP</th>
+              <th class="py-3 px-4">归属地区</th>
+              <th class="py-3 px-4">访问时间</th>
+              <th class="py-3 px-4">设备信息</th>
+            </tr>
+          </thead>
+          <tbody id="visitorTableBody" class="divide-y divide-gray-200">
+            <tr class="text-center">
+              <td colspan="5" class="py-8 text-gray-400">加载访客明细中...</td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     </div>
 
@@ -70,9 +96,9 @@
         </button>
       </div>
       <div class="overflow-x-auto">
-        <table class="w-full text-left">
-          <thead class="border-b border-gray-200">
-            <tr class="text-gray-500">
+        <table class="w-full text-left border-collapse">
+          <thead class="bg-gray-50 border-b border-gray-200">
+            <tr class="text-gray-600">
               <th class="pb-3 px-2">ID</th>
               <th class="pb-3 px-2">拦截IP</th>
               <th class="pb-3 px-2">添加时间</th>
@@ -80,8 +106,8 @@
               <th class="pb-3 px-2">操作</th>
             </tr>
           </thead>
-          <tbody id="blacklistTableBody">
-            <tr class="text-center"><td colspan="5" class="py-8 text-gray-400">加载中...</td></tr>
+          <tbody id="blacklistTableBody" class="divide-y divide-gray-200">
+            <tr class="text-center"><td colspan="5" class="py-8 text-gray-400">加载黑名单中...</td></tr>
           </tbody>
         </table>
       </div>
@@ -90,14 +116,14 @@
 
   <!-- 底部版权 -->
   <footer class="bg-white card-shadow py-4 text-center text-gray-400 text-sm">
-    <p>© 2026 访客统计系统 | SQLite3 + Express + Chart.js</p>
+    <p>© 2026 访客统计系统 | SQLite3 + Express + Chart.js | IP地区查询：ipapi.co</p>
   </footer>
 
   <script>
     // ！！！配置1：替换为你的Render后端域名
-    const BACKEND_DOMAIN = 'https://你的后端域名.onrender.com';
+    const BACKEND_DOMAIN = 'https://visitor-server-wewv.onrender.com';
     // ！！！配置2：与.env中的ADMIN_KEY一致
-    const ADMIN_KEY = 'your_admin_secret_key_2026';
+    const ADMIN_KEY = 'Lmx%%112233';
 
     // 页面加载初始化
     window.onload = async () => {
@@ -106,15 +132,32 @@
       initCharts();
     };
 
-    // 加载统计数据
+    // 加载统计数据（含访客明细表格）
     async function loadStats() {
       try {
         const res = await fetch(`${BACKEND_DOMAIN}/api/visitor/stats`);
         const { success, data } = await res.json();
         if (success) {
+          // 更新概览数据
           document.getElementById('totalVisitors').textContent = data.totalVisitors;
           document.getElementById('todayVisitors').textContent = data.todayVisitors;
-          window.chartData = data; // 存储图表数据
+          window.chartData = data;
+
+          // 渲染访客明细表格
+          const visitorTbody = document.getElementById('visitorTableBody');
+          if (data.visitorList.length === 0) {
+            visitorTbody.innerHTML = '<tr><td colspan="5" class="py-8 text-center text-gray-400">暂无访客数据</td></tr>';
+          } else {
+            visitorTbody.innerHTML = data.visitorList.map(item => `
+              <tr class="hover:bg-gray-50">
+                <td class="py-3 px-4">${item.id}</td>
+                <td class="py-3 px-4 font-mono">${item.visitor_ip}</td>
+                <td class="py-3 px-4 text-primary">${item.region}</td>
+                <td class="py-3 px-4">${new Date(item.visit_time).toLocaleString()}</td>
+                <td class="py-3 px-4 text-sm text-gray-500">${item.user_agent}</td>
+              </tr>
+            `).join('');
+          }
         }
       } catch (err) {
         Swal.fire('错误', '加载统计数据失败', 'error');
@@ -130,11 +173,11 @@
           document.getElementById('blacklistCount').textContent = data.length;
           const tbody = document.getElementById('blacklistTableBody');
           if (data.length === 0) {
-            tbody.innerHTML = '<tr class="text-center"><td colspan="5" class="py-8 text-gray-400">暂无黑名单数据</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="5" class="py-8 text-center text-gray-400">暂无黑名单数据</td></tr>';
             return;
           }
           tbody.innerHTML = data.map(item => `
-            <tr class="border-b border-gray-100 hover:bg-gray-50">
+            <tr class="hover:bg-gray-50">
               <td class="py-3 px-2">${item.id}</td>
               <td class="py-3 px-2 font-mono">${item.blocked_ip}</td>
               <td class="py-3 px-2">${new Date(item.add_time).toLocaleString()}</td>
@@ -167,17 +210,29 @@
         options: { responsive: true, maintainAspectRatio: false }
       });
 
-      // TOP10 IP柱状图
+      // TOP10 IP柱状图（显示地区）
       new Chart(document.getElementById('topIpChart'), {
         type: 'bar',
         data: {
-          labels: topIpList.map(i => i.visitor_ip),
+          labels: topIpList.map(i => `${i.visitor_ip}<br>(${i.region})`),
           datasets: [{
             label: '访问次数', data: topIpList.map(i => i.visit_count),
             backgroundColor: 'rgba(22,93,255,0.7)', borderRadius: 4
           }]
         },
-        options: { responsive: true, maintainAspectRatio: false }
+        options: { 
+          responsive: true, 
+          maintainAspectRatio: false,
+          plugins: {
+            tooltip: {
+              callbacks: {
+                label: function(context) {
+                  return `访问次数：${context.raw}`;
+                }
+              }
+            }
+          }
+        }
       });
     }
 

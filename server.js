@@ -3,40 +3,39 @@ const express = require('express');
 const sqlite3 = require('sqlite3').verbose();
 const cors = require('cors');
 const path = require('path');
+const fetch = require('node-fetch'); // 用于IP地区查询
 
-// 初始化Express应用
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// 跨域配置（允许前端请求）
+// 跨域配置
 app.use(cors({
   origin: '*',
   methods: ['GET', 'POST', 'DELETE'],
   allowedHeaders: ['Content-Type', 'x-forwarded-for']
 }));
-app.use(express.json()); // 解析JSON请求体
+app.use(express.json());
 
-// ===== SQLite3 核心配置 =====
-// 数据库文件路径：项目根目录下的 visitor.db（自动生成）
+// ===== SQLite3 数据库配置 =====
 const dbPath = path.resolve(__dirname, 'visitor.db');
 const db = new sqlite3.Database(dbPath, (err) => {
   if (err) {
-    console.error('❌ SQLite3数据库连接失败：', err.message);
+    console.error('❌ SQLite3连接失败：', err.message);
   } else {
-    console.log(`✅ SQLite3数据库连接成功（文件路径：${dbPath}）`);
-    initDatabaseTables(); // 自动创建表
+    console.log(`✅ SQLite3连接成功（文件：${dbPath}）`);
+    initDatabaseTables();
   }
 });
 
-// ===== 工具函数：封装SQLite3为Promise风格（适配async/await） =====
+// ===== 工具函数 =====
+// Promise封装SQLite3查询
 function querySql(sql, params = []) {
   return new Promise((resolve, reject) => {
-    db.all(sql, params, (err, rows) => {
-      err ? reject(err) : resolve(rows);
-    });
+    db.all(sql, params, (err, rows) => err ? reject(err) : resolve(rows));
   });
 }
 
+// Promise封装SQLite3执行
 function runSql(sql, params = []) {
   return new Promise((resolve, reject) => {
     db.run(sql, params, function (err) {
@@ -46,20 +45,39 @@ function runSql(sql, params = []) {
   });
 }
 
-// ===== 自动初始化数据表（SQLite3语法） =====
+// IP归属地查询（使用ipapi.co免费接口）
+async function getIpRegion(ip) {
+  // 本地IP不查询
+  if (ip === '127.0.0.1' || ip.includes('::')) return '本地网络';
+  try {
+    const response = await fetch(`https://ipapi.co/${ip}/json/`);
+    const data = await response.json();
+    if (data.country_name && data.region) {
+      return `${data.country_name} - ${data.region}`;
+    } else {
+      return '未知地区';
+    }
+  } catch (err) {
+    console.error(`❌ IP地区查询失败(${ip})：`, err.message);
+    return '未知地区';
+  }
+}
+
+// ===== 初始化数据表（新增region字段）=====
 function initDatabaseTables() {
-  // 1. 访客统计表
+  // 访客表：新增region字段存储IP地区
   const createVisitorTable = `
     CREATE TABLE IF NOT EXISTS visitor_stats (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       visitor_ip TEXT NOT NULL,
+      region TEXT DEFAULT '未知地区', -- 新增：IP归属地
       visit_time DATETIME DEFAULT CURRENT_TIMESTAMP,
-      user_agent TEXT,
+      user_agent TEXT DEFAULT '未知设备',
       is_valid BOOLEAN DEFAULT 1
     );
   `;
 
-  // 2. 黑名单表
+  // 黑名单表
   const createBlacklistTable = `
     CREATE TABLE IF NOT EXISTS blacklist (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -69,49 +87,60 @@ function initDatabaseTables() {
     );
   `;
 
-  // 执行表创建
   db.run(createVisitorTable, (err) => {
-    if (err) console.error('❌ 创建访客表失败：', err.message);
-    else console.log('✅ 访客表初始化成功');
+    if (err) console.error('❌ 访客表创建失败：', err.message);
+    else console.log('✅ 访客表初始化成功（含地区字段）');
   });
 
   db.run(createBlacklistTable, (err) => {
-    if (err) console.error('❌ 创建黑名单表失败：', err.message);
+    if (err) console.error('❌ 黑名单表创建失败：', err.message);
     else console.log('✅ 黑名单表初始化成功');
   });
 }
 
-// ===== 接口1：记录访客访问 =====
+// ===== 接口1：记录访客访问（新增地区查询）=====
 app.get('/api/visitor/record', async (req, res) => {
   try {
-    // 获取访客真实IP（兼容代理环境）
+    // 获取真实IP
     let visitorIp = req.headers['x-forwarded-for']?.split(',').map(ip => ip.trim())[0] 
                   || req.connection.remoteAddress 
                   || req.socket.remoteAddress;
 
-    // 本地访问IP处理
+    // 本地IP处理
     if (!visitorIp || visitorIp === '::1' || visitorIp === '127.0.0.1') {
       visitorIp = '127.0.0.1';
     }
 
-    // 检查是否在黑名单
+    // 检查黑名单
     const blacklist = await querySql('SELECT * FROM blacklist WHERE blocked_ip = ?', [visitorIp]);
     if (blacklist.length > 0) {
       return res.json({ success: false, msg: '您的IP已被拦截', isBlocked: true });
     }
 
-    // 记录访客信息
+    // 查询IP地区
+    const region = await getIpRegion(visitorIp);
     const userAgent = req.headers['user-agent'] || '未知设备';
-    await runSql('INSERT INTO visitor_stats (visitor_ip, user_agent) VALUES (?, ?)', [visitorIp, userAgent]);
 
-    res.json({ success: true, msg: '访问记录成功', isBlocked: false, visitorIp });
+    // 写入数据库（含地区）
+    await runSql(
+      'INSERT INTO visitor_stats (visitor_ip, region, user_agent) VALUES (?, ?, ?)',
+      [visitorIp, region, userAgent]
+    );
+
+    res.json({
+      success: true,
+      msg: '访问记录成功',
+      isBlocked: false,
+      visitorIp,
+      region
+    });
   } catch (err) {
     console.error('❌ 记录访客失败：', err.message);
     res.status(500).json({ success: false, msg: '服务器内部错误', error: err.message });
   }
 });
 
-// ===== 接口2：获取访客统计数据（图表用） =====
+// ===== 接口2：获取访客统计数据（图表+表格）=====
 app.get('/api/visitor/stats', async (req, res) => {
   try {
     // 总访客数
@@ -120,7 +149,10 @@ app.get('/api/visitor/stats', async (req, res) => {
 
     // 今日访客数
     const today = new Date().toISOString().split('T')[0];
-    const todayData = await querySql('SELECT COUNT(*) AS today FROM visitor_stats WHERE DATE(visit_time) = ? AND is_valid = 1', [today]);
+    const todayData = await querySql(
+      'SELECT COUNT(*) AS today FROM visitor_stats WHERE DATE(visit_time) = ? AND is_valid = 1',
+      [today]
+    );
     const todayVisitors = parseInt(todayData[0].today || 0);
 
     // 近7天趋势
@@ -134,7 +166,7 @@ app.get('/api/visitor/stats', async (req, res) => {
 
     // TOP10 IP
     const topIp = await querySql(`
-      SELECT visitor_ip, COUNT(*) AS visit_count
+      SELECT visitor_ip, region, COUNT(*) AS visit_count
       FROM visitor_stats
       WHERE is_valid = 1
       GROUP BY visitor_ip
@@ -142,9 +174,24 @@ app.get('/api/visitor/stats', async (req, res) => {
       LIMIT 10
     `);
 
+    // 访客明细（用于表格展示）
+    const visitorList = await querySql(`
+      SELECT id, visitor_ip, region, visit_time, user_agent
+      FROM visitor_stats
+      WHERE is_valid = 1
+      ORDER BY visit_time DESC
+      LIMIT 100 -- 限制显示最新100条
+    `);
+
     res.json({
       success: true,
-      data: { totalVisitors, todayVisitors, sevenDaysTrend: sevenDays, topIpList: topIp }
+      data: {
+        totalVisitors,
+        todayVisitors,
+        sevenDaysTrend: sevenDays,
+        topIpList: topIp,
+        visitorList: visitorList // 新增：访客明细列表
+      }
     });
   } catch (err) {
     console.error('❌ 获取统计数据失败：', err.message);
@@ -160,14 +207,11 @@ app.post('/api/visitor/reset', async (req, res) => {
       return res.status(403).json({ success: false, msg: '鉴权失败，密钥错误' });
     }
 
-    // 清空访客表 + 重置自增ID
     await runSql('DELETE FROM visitor_stats');
     await runSql('DELETE FROM sqlite_sequence WHERE name = "visitor_stats"');
-
     res.json({ success: true, msg: '访客数据已全部重置' });
   } catch (err) {
-    console.error('❌ 重置数据失败：', err.message);
-    res.status(500).json({ success: false, msg: '重置失败', error: err.message });
+    res.status(500).json({ success: false, msg: '重置失败' });
   }
 });
 
@@ -206,7 +250,7 @@ app.delete('/api/blacklist/delete/:id', async (req, res) => {
   }
 });
 
-// ===== 托管前端静态文件（本地调试用） =====
+// ===== 托管前端静态文件 =====
 app.use(express.static('public'));
 
 // ===== 启动服务器 =====
@@ -215,7 +259,7 @@ app.listen(PORT, () => {
   console.log(`🔗 访客记录接口：http://localhost:${PORT}/api/visitor/record`);
 });
 
-// 进程退出时关闭数据库连接
+// 进程退出时关闭数据库
 process.on('exit', () => {
   db.close((err) => {
     if (err) console.error('❌ 关闭数据库失败：', err.message);
