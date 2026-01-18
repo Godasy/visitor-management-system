@@ -1,20 +1,19 @@
-# Node.js依赖文件夹
+# Node.js依赖
 node_modules/
 
-# 环境变量文件（包含敏感配置，切勿提交到Github）
+# SQLite3数据库文件（自动生成，无需提交）
+*.db
+*.db-journal
+
+# 环境变量（敏感信息）
 .env
 
 # 系统缓存文件
 .DS_Store
-
-# npm日志文件
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# VS Code编辑器配置
+# 编辑器配置
 .vscode/
-
-# 临时文件
-tmp/
-temp/
+.idea/
