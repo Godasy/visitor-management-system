@@ -56,14 +56,26 @@
     </div>
   </div>
 
-  <!-- 记录访客访问 -->
+  <!-- 记录访客访问（修复：配置完整后端接口地址，解决跨域和统计失败） -->
   <script>
-    // 页面加载完成后调用后端接口记录访问
+    // ！！！重要配置：替换为你的Render后端完整域名（如：https://visitor-server.onrender.com）
+    const BACKEND_DOMAIN = 'https://你的Render后端域名.onrender.com';
+
+    // 页面加载完成后调用后端接口记录访问（确保请求成功）
     window.onload = async () => {
       try {
-        const response = await fetch('/api/visitor/record');
+        // 修复：使用完整后端接口地址，避免相对路径导致的404
+        const response = await fetch(`${BACKEND_DOMAIN}/api/visitor/record`, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          cache: 'no-cache' // 禁用缓存，确保每次访问都被记录
+        });
+
         const result = await response.json();
-        
+        console.log('访问记录结果：', result); // 调试日志，方便查看是否统计成功
+
         // 若IP被拦截，给出提示并隐藏核心内容
         if (result.isBlocked) {
           document.querySelector('.page-container').innerHTML = `
@@ -75,7 +87,9 @@
           `;
         }
       } catch (err) {
-        console.error('记录访问失败：', err);
+        console.error('记录访问失败（核心报错，检查后端地址和状态）：', err);
+        // 可选：添加前端提示，告知用户访问记录失败
+        alert('访问记录失败，请稍后重试或联系管理员');
       }
     };
   </script>

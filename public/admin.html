@@ -133,10 +133,13 @@
     <p>© 2026 访客统计管理系统 | 技术支持：Node.js + PostgreSQL + Chart.js</p>
   </footer>
 
-  <!-- 核心功能JS -->
+  <!-- 核心功能JS（修复：配置完整后端接口地址，确保数据正常加载） -->
   <script>
-    // 全局变量：管理员密钥（需与后端.env文件中的ADMIN_KEY一致）
-    const ADMIN_KEY = 'your_custom_admin_secret_key_123';
+    // ！！！重要配置1：替换为你的Render后端完整域名（如：https://visitor-server.onrender.com）
+    const BACKEND_DOMAIN = 'https://你的Render后端域名.onrender.com';
+    
+    // ！！！重要配置2：管理员密钥（必须与后端.env文件中的ADMIN_KEY完全一致）
+    const ADMIN_KEY = 'your_custom_admin_secret_key_123456';
 
     // 1. 页面加载完成后初始化所有数据
     window.onload = async () => {
@@ -145,10 +148,16 @@
       initCharts(); // 初始化图表
     };
 
-    // 2. 加载访客统计数据
+    // 2. 加载访客统计数据（修复：使用完整后端接口地址）
     async function loadVisitorStats() {
       try {
-        const response = await fetch('/api/visitor/stats');
+        const response = await fetch(`${BACKEND_DOMAIN}/api/visitor/stats`, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          cache: 'no-cache'
+        });
         const result = await response.json();
 
         if (result.success) {
@@ -165,14 +174,20 @@
         }
       } catch (err) {
         console.error('加载访客统计失败：', err);
-        Swal.fire('错误', '加载访客数据失败', 'error');
+        Swal.fire('错误', '加载访客数据失败，请检查后端服务状态', 'error');
       }
     }
 
-    // 3. 加载黑名单数据
+    // 3. 加载黑名单数据（修复：使用完整后端接口地址）
     async function loadBlacklist() {
       try {
-        const response = await fetch('/api/blacklist');
+        const response = await fetch(`${BACKEND_DOMAIN}/api/blacklist`, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          cache: 'no-cache'
+        });
         const result = await response.json();
 
         if (result.success) {
@@ -222,13 +237,16 @@
       }
     }
 
-    // 4. 初始化图表
+    // 4. 初始化图表（保持原有功能，确保数据渲染正常）
     function initCharts() {
+      // 兼容无数据场景，避免图表报错
+      const sevenDaysLabels = window.sevenDaysData ? window.sevenDaysData.map(item => item.visit_date) : [];
+      const sevenDaysValues = window.sevenDaysData ? window.sevenDaysData.map(item => parseInt(item.visitor_count)) : [];
+      const topIpLabels = window.topIpData ? window.topIpData.map(item => item.visitor_ip) : [];
+      const topIpValues = window.topIpData ? window.topIpData.map(item => parseInt(item.visit_count)) : [];
+
       // 近7天访客趋势图（折线图）
       const sevenDaysCtx = document.getElementById('sevenDaysChart').getContext('2d');
-      const sevenDaysLabels = window.sevenDaysData.map(item => item.visit_date);
-      const sevenDaysValues = window.sevenDaysData.map(item => parseInt(item.visitor_count));
-
       new Chart(sevenDaysCtx, {
         type: 'line',
         data: {
@@ -269,9 +287,6 @@
 
       // TOP10访客IP柱状图
       const topIpCtx = document.getElementById('topIpChart').getContext('2d');
-      const topIpLabels = window.topIpData.map(item => item.visitor_ip);
-      const topIpValues = window.topIpData.map(item => parseInt(item.visit_count));
-
       new Chart(topIpCtx, {
         type: 'bar',
         data: {
@@ -308,7 +323,7 @@
       });
     }
 
-    // 5. 重置访客数据
+    // 5. 重置访客数据（修复：使用完整后端接口地址）
     document.getElementById('resetBtn').addEventListener('click', async () => {
       // 确认弹窗
       const result = await Swal.fire({
@@ -324,7 +339,7 @@
 
       if (result.isConfirmed) {
         try {
-          const response = await fetch('/api/visitor/reset', {
+          const response = await fetch(`${BACKEND_DOMAIN}/api/visitor/reset`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json'
@@ -342,12 +357,12 @@
           }
         } catch (err) {
           console.error('重置访客数据失败：', err);
-          Swal.fire('错误', '重置数据失败', 'error');
+          Swal.fire('错误', '重置数据失败，请检查后端服务', 'error');
         }
       }
     });
 
-    // 6. 添加黑名单IP
+    // 6. 添加黑名单IP（修复：使用完整后端接口地址）
     document.getElementById('addBlacklistBtn').addEventListener('click', async () => {
       // 弹窗表单
       const { value: formValues } = await Swal.fire({
@@ -367,7 +382,7 @@
 
       if (formValues && formValues.ip) {
         try {
-          const response = await fetch('/api/blacklist/add', {
+          const response = await fetch(`${BACKEND_DOMAIN}/api/blacklist/add`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json'
@@ -392,7 +407,7 @@
       }
     });
 
-    // 7. 删除黑名单IP
+    // 7. 删除黑名单IP（修复：使用完整后端接口地址）
     async function deleteBlacklist(id) {
       // 确认弹窗
       const result = await Swal.fire({
@@ -408,8 +423,11 @@
 
       if (result.isConfirmed) {
         try {
-          const response = await fetch(`/api/blacklist/delete/${id}`, {
-            method: 'DELETE'
+          const response = await fetch(`${BACKEND_DOMAIN}/api/blacklist/delete/${id}`, {
+            method: 'DELETE',
+            headers: {
+              'Content-Type': 'application/json'
+            }
           });
 
           const data = await response.json();
