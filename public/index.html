@@ -3,45 +3,34 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>访客展示页</title>
+  <title>欢迎访问</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    tailwind.config = {
-      theme: {
-        extend: { colors: { primary: '#165DFF', neutral: '#F5F7FA' } }
-      }
-    }
-  </script>
-  <style> .page-container { min-height: 100vh; } </style>
+  <script>tailwind.config={theme:{extend:{colors:{primary:'#165DFF',neutral:'#F5F7FA'}}}}</script>
+  <style>.page-container{min-height:100vh;}</style>
 </head>
 <body class="bg-neutral font-sans">
   <div class="page-container flex flex-col items-center justify-center px-4">
     <div class="w-full max-w-4xl bg-white rounded-2xl shadow-lg p-8 md:p-12 hover:shadow-xl transition-all">
       <div class="text-center mb-8">
         <h1 class="text-[clamp(2rem,5vw,3rem)] font-bold text-gray-800 mb-2">欢迎访问</h1>
-        <p class="text-gray-600 text-lg">您的访问已被记录（非黑名单用户）</p>
+        <p class="text-gray-600 text-lg">您的访问已被安全记录（非黑名单用户）</p>
       </div>
       <div class="flex justify-center mb-8">
         <img src="https://picsum.photos/800/400" alt="展示图" class="rounded-xl w-full max-h-64 object-cover">
       </div>
       <div class="text-center text-gray-500 text-sm">
-        <p>© 2026 访客统计系统 | <a href="./admin.html" class="text-primary hover:underline">管理员入口</a></p>
+        <p>© 2026 访客统计系统 | 稳定IP查询 + Render自动唤醒 | <a href="./admin.html" class="text-primary hover:underline">管理员入口</a></p>
       </div>
     </div>
   </div>
 
   <script>
-    // ！！！替换为你的Render后端域名
-    const BACKEND_DOMAIN = 'https://visitor-server-wewv.onrender.com';
-
+    // 替换为你的Render域名（本地：http://localhost:3000，线上：https://xxx.onrender.com）
+    const BACKEND_DOMAIN = 'http://localhost:3000';
     window.onload = async () => {
       try {
-        const res = await fetch(`${BACKEND_DOMAIN}/api/visitor/record`, {
-          method: 'GET', cache: 'no-cache'
-        });
+        const res = await fetch(`${BACKEND_DOMAIN}/api/visitor/record`, { method: 'GET', cache: 'no-cache' });
         const data = await res.json();
-        console.log('访问记录结果：', data);
-
         if (data.isBlocked) {
           document.querySelector('.page-container').innerHTML = `
             <div class="w-full max-w-md bg-white rounded-2xl shadow-lg p-8 text-center">

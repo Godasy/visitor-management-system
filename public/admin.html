@@ -3,34 +3,33 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>访客管理后台（IP+地区表格版）</title>
+  <title>访客管理后台（稳定版+自动唤醒）</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.8/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11.10.4/dist/sweetalert2.all.min.js"></script>
   <script>
     tailwind.config = {
-      theme: {
-        extend: {
-          colors: {
-            primary: '#165DFF', danger: '#F53F3F', success: '#00B42A', neutral: '#F5F7FA'
-          }
-        }
-      }
+      theme: { extend: { colors: { primary: '#165DFF', danger: '#F53F3F', success: '#00B42A', neutral: '#F5F7FA' } } }
     }
   </script>
-  <style> 
+  <style>
     .card-shadow { box-shadow: 0 2px 14px rgba(0,0,0,0.06); }
     .table-responsive { overflow-x: auto; }
+    .region-cell { max-width: 350px; word-break: break-all; }
+    .ua-cell { max-width: 250px; word-break: break-all; }
   </style>
 </head>
 <body class="bg-neutral min-h-screen">
   <!-- 顶部导航 -->
   <header class="bg-white card-shadow sticky top-0 z-10">
     <div class="container mx-auto px-4 py-4 flex justify-between items-center">
-      <h1 class="text-xl font-bold text-primary">访客管理系统（IP+地区统计）</h1>
-      <button id="resetBtn" class="bg-danger hover:bg-danger/90 text-white px-4 py-2 rounded-lg transition-all">
-        重置访客数据
-      </button>
+      <h1 class="text-xl font-bold text-primary">访客管理系统（稳定版）</h1>
+      <div class="flex gap-3">
+        <span class="text-sm text-gray-500 self-center">Render保持在线</span>
+        <button id="resetBtn" class="bg-danger hover:bg-danger/90 text-white px-4 py-2 rounded-lg transition-all">
+          重置访客数据
+        </button>
+      </div>
     </div>
   </header>
 
@@ -55,39 +54,40 @@
     <!-- 图表区域 -->
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
       <div class="bg-white rounded-xl card-shadow p-6">
-        <h3 class="text-lg font-semibold mb-4">近7天访客趋势</h3>
+        <h3 class="text-lg font-semibold mb-4">近7天访客趋势（北京时间）</h3>
         <div class="h-80"><canvas id="sevenDaysChart"></canvas></div>
       </div>
       <div class="bg-white rounded-xl card-shadow p-6">
-        <h3 class="text-lg font-semibold mb-4">TOP10 访客IP（含地区）</h3>
+        <h3 class="text-lg font-semibold mb-4">TOP10 访客IP（含地区/运营商）</h3>
         <div class="h-80"><canvas id="topIpChart"></canvas></div>
       </div>
     </div>
 
-    <!-- 新增：访客明细表格（IP+地区） -->
+    <!-- 访客明细表格（最大化信息展示） -->
     <div class="bg-white rounded-xl card-shadow p-6 mb-8">
-      <h3 class="text-lg font-semibold mb-4">访客明细（最新100条）</h3>
+      <h3 class="text-lg font-semibold mb-4">访客明细（最新100条，含设备/浏览器/系统）</h3>
       <div class="table-responsive">
         <table class="w-full text-left border-collapse">
           <thead class="bg-gray-50 border-b border-gray-200">
             <tr class="text-gray-600">
               <th class="py-3 px-4">ID</th>
               <th class="py-3 px-4">访客IP</th>
-              <th class="py-3 px-4">归属地区</th>
-              <th class="py-3 px-4">访问时间</th>
-              <th class="py-3 px-4">设备信息</th>
+              <th class="py-3 px-4">归属地/运营商</th>
+              <th class="py-3 px-4">设备类型</th>
+              <th class="py-3 px-4">浏览器/系统</th>
+              <th class="py-3 px-4">访问时间（北京时间）</th>
             </tr>
           </thead>
           <tbody id="visitorTableBody" class="divide-y divide-gray-200">
             <tr class="text-center">
-              <td colspan="5" class="py-8 text-gray-400">加载访客明细中...</td>
+              <td colspan="6" class="py-8 text-gray-400">加载访客明细中...</td>
             </tr>
           </tbody>
         </table>
       </div>
     </div>
 
-    <!-- 黑名单管理 -->
+    <!-- 黑名单管理（保留原有功能） -->
     <div class="bg-white rounded-xl card-shadow p-6 mb-8">
       <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
         <h3 class="text-lg font-semibold">黑名单管理</h3>
@@ -101,7 +101,7 @@
             <tr class="text-gray-600">
               <th class="pb-3 px-2">ID</th>
               <th class="pb-3 px-2">拦截IP</th>
-              <th class="pb-3 px-2">添加时间</th>
+              <th class="pb-3 px-2">添加时间（北京时间）</th>
               <th class="pb-3 px-2">备注</th>
               <th class="pb-3 px-2">操作</th>
             </tr>
@@ -116,14 +116,13 @@
 
   <!-- 底部版权 -->
   <footer class="bg-white card-shadow py-4 text-center text-gray-400 text-sm">
-    <p>© 2026 访客统计系统 | SQLite3 + Express + Chart.js | IP地区查询：ipapi.co</p>
+    <p>© 2026 访客统计系统 | Express + SQLite3 | 稳定IP查询 + Render自动唤醒 | 访客信息：IP/地区/设备/浏览器</p>
   </footer>
 
   <script>
-    // ！！！配置1：替换为你的Render后端域名
-    const BACKEND_DOMAIN = 'https://visitor-server-wewv.onrender.com';
-    // ！！！配置2：与.env中的ADMIN_KEY一致
-    const ADMIN_KEY = 'Lmx%%112233';
+    // ！！！配置：替换为你的Render域名（本地：http://localhost:3000，线上：https://xxx.onrender.com）
+    const BACKEND_DOMAIN = 'http://localhost:3000';
+    const ADMIN_KEY = 'your_admin_secret_key_2026'; // 与.env中的ADMIN_KEY一致
 
     // 页面加载初始化
     window.onload = async () => {
@@ -132,32 +131,32 @@
       initCharts();
     };
 
-    // 加载统计数据（含访客明细表格）
+    // 加载统计数据（适配多访客信息）
     async function loadStats() {
       try {
         const res = await fetch(`${BACKEND_DOMAIN}/api/visitor/stats`);
         const { success, data } = await res.json();
         if (success) {
-          // 更新概览数据
           document.getElementById('totalVisitors').textContent = data.totalVisitors;
           document.getElementById('todayVisitors').textContent = data.todayVisitors;
           window.chartData = data;
 
-          // 渲染访客明细表格
+          // 渲染访客明细（展示设备/浏览器/系统）
           const visitorTbody = document.getElementById('visitorTableBody');
           if (data.visitorList.length === 0) {
-            visitorTbody.innerHTML = '<tr><td colspan="5" class="py-8 text-center text-gray-400">暂无访客数据</td></tr>';
-          } else {
-            visitorTbody.innerHTML = data.visitorList.map(item => `
-              <tr class="hover:bg-gray-50">
-                <td class="py-3 px-4">${item.id}</td>
-                <td class="py-3 px-4 font-mono">${item.visitor_ip}</td>
-                <td class="py-3 px-4 text-primary">${item.region}</td>
-                <td class="py-3 px-4">${new Date(item.visit_time).toLocaleString()}</td>
-                <td class="py-3 px-4 text-sm text-gray-500">${item.user_agent}</td>
-              </tr>
-            `).join('');
+            visitorTbody.innerHTML = '<tr><td colspan="6" class="py-8 text-center text-gray-400">暂无访客数据</td></tr>';
+            return;
           }
+          visitorTbody.innerHTML = data.visitorList.map(item => `
+            <tr class="hover:bg-gray-50">
+              <td class="py-3 px-4">${item.id}</td>
+              <td class="py-3 px-4 font-mono">${item.visitor_ip}</td>
+              <td class="py-3 px-4 text-primary region-cell">${item.region}</td>
+              <td class="py-3 px-4">${item.deviceType}</td>
+              <td class="py-3 px-4 ua-cell">${item.browser} | ${item.os}</td>
+              <td class="py-3 px-4">${item.visit_time}</td>
+            </tr>
+          `).join('');
         }
       } catch (err) {
         Swal.fire('错误', '加载统计数据失败', 'error');
@@ -168,9 +167,9 @@
     async function loadBlacklist() {
       try {
         const res = await fetch(`${BACKEND_DOMAIN}/api/blacklist`);
-        const { success, data } = await res.json();
+        const { success, data, count } = await res.json();
         if (success) {
-          document.getElementById('blacklistCount').textContent = data.length;
+          document.getElementById('blacklistCount').textContent = count || 0;
           const tbody = document.getElementById('blacklistTableBody');
           if (data.length === 0) {
             tbody.innerHTML = '<tr><td colspan="5" class="py-8 text-center text-gray-400">暂无黑名单数据</td></tr>';
@@ -180,7 +179,7 @@
             <tr class="hover:bg-gray-50">
               <td class="py-3 px-2">${item.id}</td>
               <td class="py-3 px-2 font-mono">${item.blocked_ip}</td>
-              <td class="py-3 px-2">${new Date(item.add_time).toLocaleString()}</td>
+              <td class="py-3 px-2">${item.add_time}</td>
               <td class="py-3 px-2">${item.remark}</td>
               <td class="py-3 px-2"><button onclick="delBlacklist(${item.id})" class="text-danger hover:text-danger/80">删除</button></td>
             </tr>
@@ -191,7 +190,7 @@
       }
     }
 
-    // 初始化图表
+    // 初始化图表（适配详细信息展示）
     function initCharts() {
       if (!window.chartData) return;
       const { sevenDaysTrend, topIpList } = window.chartData;
@@ -210,25 +209,26 @@
         options: { responsive: true, maintainAspectRatio: false }
       });
 
-      // TOP10 IP柱状图（显示地区）
+      // TOP10 IP柱状图（tooltip展示完整地区/运营商）
       new Chart(document.getElementById('topIpChart'), {
         type: 'bar',
         data: {
-          labels: topIpList.map(i => `${i.visitor_ip}<br>(${i.region})`),
+          labels: topIpList.map(i => i.visitor_ip),
           datasets: [{
             label: '访问次数', data: topIpList.map(i => i.visit_count),
             backgroundColor: 'rgba(22,93,255,0.7)', borderRadius: 4
           }]
         },
         options: { 
-          responsive: true, 
-          maintainAspectRatio: false,
+          responsive: true, maintainAspectRatio: false,
           plugins: {
             tooltip: {
               callbacks: {
-                label: function(context) {
-                  return `访问次数：${context.raw}`;
-                }
+                title: (context) => {
+                  const ipItem = topIpList[context[0].dataIndex];
+                  return `${ipItem.visitor_ip}\n${ipItem.region}`;
+                },
+                label: (context) => `访问次数：${context.raw}`
               }
             }
           }
@@ -236,13 +236,9 @@
       });
     }
 
-    // 重置数据
+    // 重置数据/添加/删除黑名单（原有功能，无修改）
     document.getElementById('resetBtn').addEventListener('click', async () => {
-      const result = await Swal.fire({
-        title: '警告', text: '确定重置所有访客数据？不可恢复！',
-        icon: 'warning', showCancelButton: true,
-        confirmButtonText: '确定', cancelButtonText: '取消'
-      });
+      const result = await Swal.fire({ title: '警告', text: '确定重置所有访客数据？不可恢复！', icon: 'warning', showCancelButton: true });
       if (result.isConfirmed) {
         try {
           const res = await fetch(`${BACKEND_DOMAIN}/api/visitor/reset`, {
@@ -257,15 +253,10 @@
         }
       }
     });
-
-    // 添加黑名单
     document.getElementById('addBlacklistBtn').addEventListener('click', async () => {
       const { value } = await Swal.fire({
         title: '添加黑名单IP',
-        html: `
-          <input id="ip" class="swal2-input mb-3" placeholder="输入IP地址">
-          <input id="remark" class="swal2-input" placeholder="备注（可选）">
-        `,
+        html: `<input id="ip" class="swal2-input mb-3" placeholder="输入IP地址"><input id="remark" class="swal2-input" placeholder="备注（可选）">`,
         preConfirm: () => ({ ip: document.getElementById('ip').value, remark: document.getElementById('remark').value })
       });
       if (value?.ip) {
@@ -282,13 +273,8 @@
         }
       }
     });
-
-    // 删除黑名单
     async function delBlacklist(id) {
-      const result = await Swal.fire({
-        title: '确定删除？', text: '删除后该IP可正常访问',
-        icon: 'question', showCancelButton: true
-      });
+      const result = await Swal.fire({ title: '确定删除？', text: '删除后该IP可正常访问', icon: 'question', showCancelButton: true });
       if (result.isConfirmed) {
         try {
           const res = await fetch(`${BACKEND_DOMAIN}/api/blacklist/delete/${id}`, { method: 'DELETE' });

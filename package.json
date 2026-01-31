@@ -1,7 +1,7 @@
 {
   "name": "visitor-management-system",
-  "version": "1.0.0",
-  "description": "访客统计+IP地区表格展示",
+  "version": "2.0.0",
+  "description": "访客统计系统（稳定IP查询+最大化信息+Render自动唤醒）",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -11,9 +11,10 @@
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
     "express": "^4.18.2",
-    "ip2region": "^2.3.0",
+    "sqlite3": "^5.1.6",
     "node-fetch": "^2.7.0",
-    "sqlite3": "^5.1.6"
+    "node-schedule": "^2.1.1",
+    "useragent": "^2.3.0"
   },
   "devDependencies": {
     "nodemon": "^3.0.1"
