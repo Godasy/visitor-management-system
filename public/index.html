@@ -25,12 +25,19 @@
   </div>
 
   <script>
-    // 替换为你的Render域名（本地：http://localhost:3000，线上：https://xxx.onrender.com）
-    const BACKEND_DOMAIN = 'http://localhost:3000';
+    // ！！！仅需修改这里：本地=http://localhost:3000；线上=你的Render域名（https://xxx.onrender.com）
+    const BACKEND_DOMAIN = 'https://visitor-server-wewv.onrender.com';
+    // 页面加载立即记录，增加超时和错误处理
     window.onload = async () => {
       try {
-        const res = await fetch(`${BACKEND_DOMAIN}/api/visitor/record`, { method: 'GET', cache: 'no-cache' });
+        const res = await fetch(`${BACKEND_DOMAIN}/api/visitor/record`, {
+          method: 'GET',
+          cache: 'no-cache',
+          timeout: 10000,
+          headers: { 'Content-Type': 'application/json' }
+        });
         const data = await res.json();
+        // 若被拉黑，显示提示
         if (data.isBlocked) {
           document.querySelector('.page-container').innerHTML = `
             <div class="w-full max-w-md bg-white rounded-2xl shadow-lg p-8 text-center">
@@ -41,7 +48,8 @@
           `;
         }
       } catch (err) {
-        console.error('记录访问失败：', err);
+        console.log('记录访问请求异常：', err.message);
+        // 即使请求失败，也不影响页面展示
       }
     };
   </script>

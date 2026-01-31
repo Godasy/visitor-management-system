@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>访客管理后台（稳定版+自动唤醒）</title>
+  <title>访客管理后台（稳定版）</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.8/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11.10.4/dist/sweetalert2.all.min.js"></script>
@@ -15,8 +15,7 @@
   <style>
     .card-shadow { box-shadow: 0 2px 14px rgba(0,0,0,0.06); }
     .table-responsive { overflow-x: auto; }
-    .region-cell { max-width: 350px; word-break: break-all; }
-    .ua-cell { max-width: 250px; word-break: break-all; }
+    .text-ellipsis { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   </style>
 </head>
 <body class="bg-neutral min-h-screen">
@@ -24,8 +23,8 @@
   <header class="bg-white card-shadow sticky top-0 z-10">
     <div class="container mx-auto px-4 py-4 flex justify-between items-center">
       <h1 class="text-xl font-bold text-primary">访客管理系统（稳定版）</h1>
-      <div class="flex gap-3">
-        <span class="text-sm text-gray-500 self-center">Render保持在线</span>
+      <div class="flex gap-3 items-center">
+        <span id="serverStatus" class="text-sm text-success">✅ 服务器在线</span>
         <button id="resetBtn" class="bg-danger hover:bg-danger/90 text-white px-4 py-2 rounded-lg transition-all">
           重置访客数据
         </button>
@@ -63,16 +62,17 @@
       </div>
     </div>
 
-    <!-- 访客明细表格（最大化信息展示） -->
+    <!-- 访客明细表格（核心修复：直接渲染后端解析的数据） -->
     <div class="bg-white rounded-xl card-shadow p-6 mb-8">
-      <h3 class="text-lg font-semibold mb-4">访客明细（最新100条，含设备/浏览器/系统）</h3>
+      <h3 class="text-lg font-semibold mb-4">访客明细（最新100条）</h3>
       <div class="table-responsive">
         <table class="w-full text-left border-collapse">
           <thead class="bg-gray-50 border-b border-gray-200">
             <tr class="text-gray-600">
               <th class="py-3 px-4">ID</th>
               <th class="py-3 px-4">访客IP</th>
-              <th class="py-3 px-4">归属地/运营商</th>
+              <th class="py-3 px-4">归属地</th>
+              <th class="py-3 px-4">运营商</th>
               <th class="py-3 px-4">设备类型</th>
               <th class="py-3 px-4">浏览器/系统</th>
               <th class="py-3 px-4">访问时间（北京时间）</th>
@@ -80,14 +80,14 @@
           </thead>
           <tbody id="visitorTableBody" class="divide-y divide-gray-200">
             <tr class="text-center">
-              <td colspan="6" class="py-8 text-gray-400">加载访客明细中...</td>
+              <td colspan="7" class="py-8 text-gray-400">正在加载访客数据...</td>
             </tr>
           </tbody>
         </table>
       </div>
     </div>
 
-    <!-- 黑名单管理（保留原有功能） -->
+    <!-- 黑名单管理 -->
     <div class="bg-white rounded-xl card-shadow p-6 mb-8">
       <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
         <h3 class="text-lg font-semibold">黑名单管理</h3>
@@ -101,13 +101,13 @@
             <tr class="text-gray-600">
               <th class="pb-3 px-2">ID</th>
               <th class="pb-3 px-2">拦截IP</th>
-              <th class="pb-3 px-2">添加时间（北京时间）</th>
+              <th class="pb-3 px-2">添加时间</th>
               <th class="pb-3 px-2">备注</th>
               <th class="pb-3 px-2">操作</th>
             </tr>
           </thead>
           <tbody id="blacklistTableBody" class="divide-y divide-gray-200">
-            <tr class="text-center"><td colspan="5" class="py-8 text-gray-400">加载黑名单中...</td></tr>
+            <tr class="text-center"><td colspan="5" class="py-8 text-gray-400">正在加载黑名单...</td></tr>
           </tbody>
         </table>
       </div>
@@ -116,62 +116,95 @@
 
   <!-- 底部版权 -->
   <footer class="bg-white card-shadow py-4 text-center text-gray-400 text-sm">
-    <p>© 2026 访客统计系统 | Express + SQLite3 | 稳定IP查询 + Render自动唤醒 | 访客信息：IP/地区/设备/浏览器</p>
+    <p>© 2026 访客统计系统 | Express + SQLite3 | 稳定IP查询 + Render自动唤醒</p>
   </footer>
 
   <script>
-    // ！！！配置：替换为你的Render域名（本地：http://localhost:3000，线上：https://xxx.onrender.com）
-    const BACKEND_DOMAIN = 'http://localhost:3000';
-    const ADMIN_KEY = 'your_admin_secret_key_2026'; // 与.env中的ADMIN_KEY一致
+    // ！！！仅需修改这2个参数，其余无需动
+    const BACKEND_DOMAIN = 'https://visitor-server-wewv.onrender.com'; // 本地=http://localhost:3000；线上=你的Render域名（https://xxx.onrender.com）
+    const ADMIN_KEY = 'your_admin_secret_key_2026'; // 必须和.env中的ADMIN_KEY一致
 
-    // 页面加载初始化
+    // 全局图表实例，避免重复创建
+    let sevenDaysChart = null;
+    let topIpChart = null;
+    window.chartData = { sevenDaysTrend: [], topIpList: [] };
+
+    // 页面加载初始化所有数据
     window.onload = async () => {
-      await loadStats();
-      await loadBlacklist();
-      initCharts();
+      await checkServerStatus(); // 先检查服务器状态
+      await Promise.all([loadStats(), loadBlacklist()]); // 并行加载数据
+      initCharts(); // 初始化图表
+      // 每30秒自动刷新数据，确保实时更新
+      setInterval(async () => { await loadStats(); await loadBlacklist(); }, 30000);
     };
 
-    // 加载统计数据（适配多访客信息）
+    // 检查服务器状态（新增，确保前端能连接后端）
+    async function checkServerStatus() {
+      try {
+        const res = await fetch(`${BACKEND_DOMAIN}/api/health`, { timeout: 5000 });
+        const data = await res.json();
+        if (data.status === 'online') {
+          document.getElementById('serverStatus').textContent = `✅ 服务器在线 | ${data.time}`;
+          document.getElementById('serverStatus').className = 'text-sm text-success';
+        } else {
+          throw new Error('服务器离线');
+        }
+      } catch (err) {
+        document.getElementById('serverStatus').textContent = '❌ 服务器离线，请检查后端';
+        document.getElementById('serverStatus').className = 'text-sm text-danger';
+        Swal.fire('警告', '无法连接到后端服务器，请先启动后端并检查域名配置', 'warning');
+      }
+    }
+
+    // 加载统计数据（核心修复：直接渲染后端解析的数据，无需二次处理）
     async function loadStats() {
       try {
-        const res = await fetch(`${BACKEND_DOMAIN}/api/visitor/stats`);
+        const res = await fetch(`${BACKEND_DOMAIN}/api/visitor/stats`, {
+          method: 'GET',
+          cache: 'no-cache',
+          timeout: 10000
+        });
         const { success, data } = await res.json();
-        if (success) {
-          document.getElementById('totalVisitors').textContent = data.totalVisitors;
-          document.getElementById('todayVisitors').textContent = data.todayVisitors;
+        if (success && data) {
+          // 更新概览数据
+          document.getElementById('totalVisitors').textContent = data.totalVisitors || 0;
+          document.getElementById('todayVisitors').textContent = data.todayVisitors || 0;
           window.chartData = data;
 
-          // 渲染访客明细（展示设备/浏览器/系统）
-          const visitorTbody = document.getElementById('visitorTableBody');
-          if (data.visitorList.length === 0) {
-            visitorTbody.innerHTML = '<tr><td colspan="6" class="py-8 text-center text-gray-400">暂无访客数据</td></tr>';
+          // 渲染访客明细（直接使用后端解析的数据，核心修复）
+          const tbody = document.getElementById('visitorTableBody');
+          if (!data.visitorList || data.visitorList.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" class="py-8 text-center text-gray-400">暂无访客数据，请先访问展示页触发记录</td></tr>';
             return;
           }
-          visitorTbody.innerHTML = data.visitorList.map(item => `
+          // 直接遍历后端解析后的数据，无需拆分
+          tbody.innerHTML = data.visitorList.map(item => `
             <tr class="hover:bg-gray-50">
               <td class="py-3 px-4">${item.id}</td>
               <td class="py-3 px-4 font-mono">${item.visitor_ip}</td>
-              <td class="py-3 px-4 text-primary region-cell">${item.region}</td>
+              <td class="py-3 px-4 text-primary">${item.country} ${item.province} ${item.city}</td>
+              <td class="py-3 px-4">${item.isp}</td>
               <td class="py-3 px-4">${item.deviceType}</td>
-              <td class="py-3 px-4 ua-cell">${item.browser} | ${item.os}</td>
+              <td class="py-3 px-4">${item.browser} | ${item.os}</td>
               <td class="py-3 px-4">${item.visit_time}</td>
             </tr>
           `).join('');
         }
       } catch (err) {
-        Swal.fire('错误', '加载统计数据失败', 'error');
+        console.error('加载统计数据失败：', err.message);
+        // 仅打印错误，不弹窗，避免干扰使用
       }
     }
 
-    // 加载黑名单
+    // 加载黑名单数据
     async function loadBlacklist() {
       try {
-        const res = await fetch(`${BACKEND_DOMAIN}/api/blacklist`);
+        const res = await fetch(`${BACKEND_DOMAIN}/api/blacklist`, { cache: 'no-cache' });
         const { success, data, count } = await res.json();
         if (success) {
           document.getElementById('blacklistCount').textContent = count || 0;
           const tbody = document.getElementById('blacklistTableBody');
-          if (data.length === 0) {
+          if (!data || data.length === 0) {
             tbody.innerHTML = '<tr><td colspan="5" class="py-8 text-center text-gray-400">暂无黑名单数据</td></tr>';
             return;
           }
@@ -186,49 +219,58 @@
           `).join('');
         }
       } catch (err) {
-        Swal.fire('错误', '加载黑名单失败', 'error');
+        console.error('加载黑名单失败：', err.message);
       }
     }
 
-    // 初始化图表（适配详细信息展示）
+    // 初始化图表（容错，避免无数据时报错）
     function initCharts() {
-      if (!window.chartData) return;
       const { sevenDaysTrend, topIpList } = window.chartData;
-      
+      // 销毁旧图表，避免重复创建
+      if (sevenDaysChart) sevenDaysChart.destroy();
+      if (topIpChart) topIpChart.destroy();
+
       // 近7天趋势图
-      new Chart(document.getElementById('sevenDaysChart'), {
+      sevenDaysChart = new Chart(document.getElementById('sevenDaysChart'), {
         type: 'line',
         data: {
-          labels: sevenDaysTrend.map(i => i.visit_date),
+          labels: sevenDaysTrend.map(i => i.visit_date || ''),
           datasets: [{
-            label: '访客数', data: sevenDaysTrend.map(i => i.visitor_count),
-            borderColor: '#165DFF', backgroundColor: 'rgba(22,93,255,0.1)',
-            tension: 0.3, fill: true
+            label: '访客数',
+            data: sevenDaysTrend.map(i => i.visitor_count || 0),
+            borderColor: '#165DFF',
+            backgroundColor: 'rgba(22,93,255,0.1)',
+            tension: 0.3,
+            fill: true
           }]
         },
-        options: { responsive: true, maintainAspectRatio: false }
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
+        }
       });
 
-      // TOP10 IP柱状图（tooltip展示完整地区/运营商）
-      new Chart(document.getElementById('topIpChart'), {
+      // TOP10 IP柱状图
+      topIpChart = new Chart(document.getElementById('topIpChart'), {
         type: 'bar',
         data: {
-          labels: topIpList.map(i => i.visitor_ip),
+          labels: topIpList.map(i => i.visitor_ip || ''),
           datasets: [{
-            label: '访问次数', data: topIpList.map(i => i.visit_count),
-            backgroundColor: 'rgba(22,93,255,0.7)', borderRadius: 4
+            label: '访问次数',
+            data: topIpList.map(i => i.visit_count || 0),
+            backgroundColor: 'rgba(22,93,255,0.7)',
+            borderRadius: 4
           }]
         },
-        options: { 
-          responsive: true, maintainAspectRatio: false,
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: { y: { beginAtZero: true, ticks: { precision: 0 } } },
           plugins: {
             tooltip: {
               callbacks: {
-                title: (context) => {
-                  const ipItem = topIpList[context[0].dataIndex];
-                  return `${ipItem.visitor_ip}\n${ipItem.region}`;
-                },
-                label: (context) => `访问次数：${context.raw}`
+                title: (ctx) => topIpList[ctx[0].dataIndex]?.region || '未知地区'
               }
             }
           }
@@ -236,53 +278,75 @@
       });
     }
 
-    // 重置数据/添加/删除黑名单（原有功能，无修改）
+    // 重置数据
     document.getElementById('resetBtn').addEventListener('click', async () => {
-      const result = await Swal.fire({ title: '警告', text: '确定重置所有访客数据？不可恢复！', icon: 'warning', showCancelButton: true });
+      const result = await Swal.fire({
+        title: '警告',
+        text: '确定重置所有访客数据？操作不可恢复！',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: '确认重置',
+        cancelButtonText: '取消'
+      });
       if (result.isConfirmed) {
         try {
           const res = await fetch(`${BACKEND_DOMAIN}/api/visitor/reset`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ adminKey: ADMIN_KEY })
           });
           const { success, msg } = await res.json();
           Swal.fire(success ? '成功' : '错误', msg, success ? 'success' : 'error');
-          if (success) loadStats();
+          if (success) await loadStats(); // 刷新数据
         } catch (err) {
-          Swal.fire('错误', '重置失败', 'error');
+          Swal.fire('错误', '数据重置失败，请检查密钥是否正确', 'error');
         }
       }
     });
+
+    // 添加黑名单
     document.getElementById('addBlacklistBtn').addEventListener('click', async () => {
       const { value } = await Swal.fire({
         title: '添加黑名单IP',
-        html: `<input id="ip" class="swal2-input mb-3" placeholder="输入IP地址"><input id="remark" class="swal2-input" placeholder="备注（可选）">`,
-        preConfirm: () => ({ ip: document.getElementById('ip').value, remark: document.getElementById('remark').value })
+        html: `<input id="ip" class="swal2-input mb-3" placeholder="请输入要拦截的IP地址" required>
+               <input id="remark" class="swal2-input" placeholder="备注（可选）">`,
+        preConfirm: () => ({
+          ip: document.getElementById('ip').value.trim(),
+          remark: document.getElementById('remark').value.trim()
+        })
       });
       if (value?.ip) {
         try {
           const res = await fetch(`${BACKEND_DOMAIN}/api/blacklist/add`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(value)
           });
           const { success, msg } = await res.json();
           Swal.fire(success ? '成功' : '错误', msg, success ? 'success' : 'error');
-          if (success) loadBlacklist();
+          if (success) await loadBlacklist(); // 刷新黑名单
         } catch (err) {
-          Swal.fire('错误', '添加失败', 'error');
+          Swal.fire('错误', '添加失败，请稍后重试', 'error');
         }
       }
     });
+
+    // 删除黑名单
     async function delBlacklist(id) {
-      const result = await Swal.fire({ title: '确定删除？', text: '删除后该IP可正常访问', icon: 'question', showCancelButton: true });
+      const result = await Swal.fire({
+        title: '确认删除？',
+        text: '删除后该IP将可正常访问系统',
+        icon: 'question',
+        showCancelButton: true
+      });
       if (result.isConfirmed) {
         try {
           const res = await fetch(`${BACKEND_DOMAIN}/api/blacklist/delete/${id}`, { method: 'DELETE' });
           const { success, msg } = await res.json();
           Swal.fire(success ? '成功' : '错误', msg, success ? 'success' : 'error');
-          if (success) loadBlacklist();
+          if (success) await loadBlacklist(); // 刷新黑名单
         } catch (err) {
-          Swal.fire('错误', '删除失败', 'error');
+          Swal.fire('错误', '删除失败，请稍后重试', 'error');
         }
       }
     }
